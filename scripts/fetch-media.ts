@@ -5,15 +5,18 @@
  *
  * Downloads one demo GIF per exercise into assets/exercises/<id>.gif and
  * regenerates src/media.ts. The app never calls the API; it only reads the
- * bundled assets, so it still works offline and needs no key.
+ * bundled assets, so it works offline and needs no key.
+ *
+ * Resumable: exercises whose GIF is already on disk are skipped, and
+ * src/media.ts is generated from the directory rather than from this run, so a
+ * run killed by the host's rate limiter loses nothing. Just run it again.
  *
  * Source: https://oss.exercisedb.dev — the keyless open-source ExerciseDB host.
  */
 import { setDefaultAutoSelectFamily } from 'node:net'
 import { setDefaultResultOrder } from 'node:dns'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { allExercises } from '../src/program'
 
 // ponytail: prefer IPv4. Some networks (including the one this was written on)
 // advertise AAAA records that blackhole, and Node does not fall back the way
@@ -21,170 +24,137 @@ import { allExercises } from '../src/program'
 setDefaultAutoSelectFamily(false)
 setDefaultResultOrder('ipv4first')
 
-const API = 'https://oss.exercisedb.dev/api/v1/exercises'
+const MEDIA_HOST = 'https://static.exercisedb.dev/media'
 const OUT_DIR = join(import.meta.dirname, '..', 'assets', 'exercises')
 const MEDIA_TS = join(import.meta.dirname, '..', 'src', 'media.ts')
-// The host rate-limits hard and the catalogue is 60 pages, so keep it around.
-// Delete this file to force a refresh.
-const CACHE = join(import.meta.dirname, '..', '.exercisedb-cache.json')
 
-type Remote = { exerciseId: string; name: string; gifUrl: string }
+/**
+ * Our exercise id -> the ExerciseDB exerciseId whose GIF demonstrates it.
+ *
+ * Chosen by hand, deliberately. Fuzzy name matching was tried first and picked
+ * plausible-but-wrong lifts — a decline press for the incline press, a jump
+ * squat for the squat, a yoga pose for the pec deck. A wrong demo mid-set is
+ * worse than none, and 29 exercises is few enough to just decide.
+ *
+ * Keyed by exerciseId rather than name because the remote names carry encoding
+ * damage ("sled 45в° leg press").
+ *
+ * Two exercises are deliberately absent — the catalogue has no pec deck at all
+ * and no behind-the-body cable curl. They render text only.
+ */
+const SOURCE: Record<string, string> = {
+  // Chest
+  'incline-smith-press': '5v7KYld', // smith incline bench press
+  'flat-smith-press': 'EIeI8Vf', // barbell bench press (no flat smith press exists)
+  'incline-db-press': 'ns0SIbU', // dumbbell incline bench press
+  'cable-fly': 'FVmZVhk', // cable low fly
+  // Back
+  'lat-pulldown-overhand': 'LEprlgG', // cable lat pulldown full range of motion
+  'lat-pulldown-underhand': 'ecpY0rH', // reverse grip machine lat pulldown
+  'cable-row': 'hvV79Si', // cable low seated row
+  't-bar-row': 'aaXr7ld', // lever t bar row
+  'one-arm-db-row': 'C0MA9bC', // dumbbell one arm bent-over row
+  // Shoulders
+  'standing-ohp': 'Kyd9Rz5', // barbell standing wide military press
+  'db-lateral-raise': 'DsgkuIt', // dumbbell lateral raise
+  'cable-lateral-raise': 'goJ6ezq', // cable lateral raise
+  'rear-delt-pec-deck': 'EAs3xL9', // dumbbell reverse fly — same movement pattern
+  // Arms
+  'straight-bar-pushdown': '3ZflifB', // cable pushdown
+  'straight-bar-curl': 'BCGQ6J5', // cable close grip curl
+  'overhead-rope-ext': '2IxROQ1', // cable overhead triceps extension (rope)
+  'skull-crushers': 'h8LFzo9', // barbell lying triceps extension skull crusher
+  'ez-bar-curl': '6TG6x2w', // ez barbell curl
+  // Legs
+  squat: 'qXTaZnJ', // barbell full squat
+  'leg-press': '10Z2DXU', // sled 45 degree leg press
+  'hamstring-curl': '17lJ1kr', // lever lying leg curl
+  'leg-extension': 'my33uHU', // lever leg extension
+  'standing-calf-raise': 'ykUOVze', // lever standing calf raise
+  // Friday's light work reuses the same movements
+  'light-lateral-raise': 'DsgkuIt',
+  'light-rear-delt-pec-deck': 'EAs3xL9',
+  'light-pushdown': '3ZflifB',
+  'light-straight-bar-curl': 'BCGQ6J5',
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-/** The host returns 429 well before the catalogue is exhausted. */
+/** The host rate-limits aggressively, so every request goes through here. */
 async function get(url: string, attempt = 1): Promise<Response> {
   const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
   if (res.status === 429 || res.status >= 500) {
-    if (attempt > 6) throw new Error(`${url} -> ${res.status} after ${attempt} attempts`)
+    if (attempt > 8) throw new Error(`${res.status} after ${attempt} attempts`)
     const retryAfter = Number(res.headers.get('retry-after'))
-    const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2000 * 2 ** (attempt - 1)
-    process.stdout.write(`\n  ${res.status}, waiting ${Math.round(wait / 1000)}s...`)
+    const wait =
+      Number.isFinite(retryAfter) && retryAfter > 0
+        ? retryAfter * 1000
+        : Math.min(30_000, 1500 * 2 ** (attempt - 1))
+    console.log(`    ${res.status} — waiting ${Math.round(wait / 1000)}s`)
     await sleep(wait)
     return get(url, attempt + 1)
   }
-  if (!res.ok) throw new Error(`${url} -> ${res.status}`)
+  if (!res.ok) throw new Error(`${res.status}`)
   return res
 }
 
-/** ExerciseDB's ?search= is ignored and /search returns nothing, so page the lot. */
-async function fetchCatalogue(): Promise<Remote[]> {
-  if (existsSync(CACHE)) {
-    const cached = JSON.parse(readFileSync(CACHE, 'utf8')) as Remote[]
-    console.log(`  using ${cached.length} cached exercises (delete ${CACHE} to refresh)`)
-    return cached
-  }
-  const out: Remote[] = []
-  let cursor: string | undefined
-  do {
-    const res = await get(`${API}?limit=25${cursor ? `&cursor=${cursor}` : ''}`)
-    const body = (await res.json()) as {
-      data: Remote[]
-      meta: { hasNextPage: boolean; nextCursor?: string }
-    }
-    out.push(...body.data)
-    cursor = body.meta.hasNextPage ? body.meta.nextCursor : undefined
-    process.stdout.write(`\r  fetched ${out.length} exercises`)
-    await sleep(250) // stay under the limit rather than back off into it
-  } while (cursor)
-  process.stdout.write('\n')
-  writeFileSync(CACHE, JSON.stringify(out))
-  return out
-}
-
-/** Words that say nothing about which movement this is. */
-const NOISE = new Set([
-  'the', 'a', 'with', 'and', 'on', 'to', 'of', 'in', 'up', 'version',
-  'light', 'heavy', 'machine', 'exercise', 'variation',
-])
-
-const tokens = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[()]/g, ' ')
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t && !NOISE.has(t))
-
-/**
- * Our names are gym shorthand ("T-Bar Row (Upper Back)"), theirs are verbose
- * ("barbell t-bar row"). Score on token overlap weighted toward covering OUR
- * tokens — a remote name with extra words is fine, a remote name missing our
- * distinguishing words is not.
- */
-function score(mine: string[], theirs: string[]): number {
-  if (mine.length === 0) return 0
-  const theirSet = new Set(theirs)
-  let hit = 0
-  for (const t of mine) if (theirSet.has(t)) hit++
-  const coverage = hit / mine.length
-  // Tie-break toward the tersest remote name that still covers us.
-  return coverage - theirs.length * 0.001
-}
-
-/**
- * Names our token scorer gets wrong or cannot know. Values are the exact
- * remote `name`. Verified against the catalogue by the run that produced them.
- */
-const MANUAL: Record<string, string> = {}
-
-async function download(url: string, dest: string) {
-  const res = await get(url)
-  writeFileSync(dest, Buffer.from(await res.arrayBuffer()))
-}
-
-async function main() {
-  console.log('Fetching exercise catalogue...')
-  const catalogue = await fetchCatalogue()
-  const indexed = catalogue.map((r) => ({ ...r, tokens: tokens(r.name) }))
-  const byName = new Map(catalogue.map((r) => [r.name.toLowerCase(), r]))
-
-  // Alternatives are logged under their own exercise_id, so they need art too.
-  const wanted = [
-    ...allExercises().map((e) => ({ id: e.id, name: e.name })),
-    ...allExercises().flatMap((e) => e.alternatives ?? []),
-  ]
-
-  mkdirSync(OUT_DIR, { recursive: true })
-  for (const f of readdirSync(OUT_DIR)) rmSync(join(OUT_DIR, f))
-
-  const got: string[] = []
-  const missed: string[] = []
-
-  for (const { id, name } of wanted) {
-    const manual = MANUAL[id] ? byName.get(MANUAL[id].toLowerCase()) : undefined
-    if (MANUAL[id] && !manual) {
-      missed.push(`${id} — manual override "${MANUAL[id]}" matches nothing`)
-      continue
-    }
-
-    let best = manual
-    let bestScore = manual ? 1 : 0
-    if (!manual) {
-      const mine = tokens(name)
-      for (const remote of indexed) {
-        const s = score(mine, remote.tokens)
-        if (s > bestScore) {
-          bestScore = s
-          best = remote
-        }
-      }
-    }
-
-    // Below ~60% of our distinguishing words covered it is a different lift.
-    if (!best || bestScore < 0.6) {
-      missed.push(`${id} (${name}) — best ${best?.name ?? 'none'} @ ${bestScore.toFixed(2)}`)
-      continue
-    }
-
-    try {
-      await download(best.gifUrl, join(OUT_DIR, `${id}.gif`))
-      got.push(id)
-      console.log(`  ${id} <- "${best.name}" (${bestScore.toFixed(2)})`)
-    } catch (e) {
-      missed.push(`${id} — download failed: ${String(e)}`)
-    }
-  }
-
+/** Generated from the directory, so a partial run still yields a valid map. */
+function writeMediaModule(): number {
+  const ids = existsSync(OUT_DIR)
+    ? readdirSync(OUT_DIR)
+        .filter((f) => f.endsWith('.gif') && statSync(join(OUT_DIR, f)).size > 0)
+        .map((f) => f.replace(/\.gif$/, ''))
+        .sort()
+    : []
   writeFileSync(
     MEDIA_TS,
     `// Generated by scripts/fetch-media.ts. Do not edit by hand.
 // Metro resolves require() statically, so this map lists only files that exist
 // on disk — an exercise absent from it renders text only, never an error.
 export const MEDIA: Record<string, number> = {
-${got.map((id) => `  '${id}': require('../assets/exercises/${id}.gif'),`).join('\n')}
+${ids.map((id) => `  '${id}': require('../assets/exercises/${id}.gif'),`).join('\n')}
 }
 `,
   )
+  return ids.length
+}
 
-  console.log(`\n${got.length}/${wanted.length} exercises have media.`)
-  if (missed.length) {
-    console.log(`\nNo match — source these by hand into assets/exercises/<id>.gif:`)
-    for (const m of missed) console.log(`  ${m}`)
-    console.log(`\nThen add the correct remote name to MANUAL in this script and re-run.`)
+async function main() {
+  mkdirSync(OUT_DIR, { recursive: true })
+  const failed: string[] = []
+  let fetched = 0
+  let skipped = 0
+
+  for (const [id, remoteId] of Object.entries(SOURCE)) {
+    const dest = join(OUT_DIR, `${id}.gif`)
+    if (existsSync(dest) && statSync(dest).size > 0) {
+      skipped++
+      continue
+    }
+    try {
+      const res = await get(`${MEDIA_HOST}/${remoteId}.gif`)
+      const bytes = Buffer.from(await res.arrayBuffer())
+      if (bytes.length === 0) throw new Error('empty response')
+      writeFileSync(dest, bytes)
+      fetched++
+      console.log(`  ${id} <- ${remoteId} (${Math.round(bytes.length / 1024)}kb)`)
+    } catch (e) {
+      failed.push(`${id} <- ${remoteId}: ${String(e)}`)
+    }
+    await sleep(300)
+  }
+
+  const total = writeMediaModule()
+  console.log(`\n${total} exercises have media (${fetched} new, ${skipped} already present).`)
+  if (failed.length) {
+    console.log('\nFailed — pick a different exerciseId in SOURCE, or drop a GIF into')
+    console.log('assets/exercises/<id>.gif by hand:')
+    for (const f of failed) console.log(`  ${f}`)
   }
 }
 
 main().catch((e) => {
+  writeMediaModule() // keep src/media.ts consistent with disk even on failure
   console.error(e)
   process.exit(1)
 })

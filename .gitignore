@@ -42,5 +42,3 @@ example
 /ios
 /android
 
-# one-shot media fetcher catalogue cache
-.exercisedb-cache.json
