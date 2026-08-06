@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated'
+import { Image } from 'expo-image'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { findExercise } from '../../src/program'
 import { lastPerformance, resolveSet } from '../../src/logic'
 import { deleteSet, insertSet, setsForExercise, setsForSession } from '../../src/db'
+import { MEDIA } from '../../src/media'
 import { BigButton, Card, Label, Muted, NumField } from '../../src/ui'
 import { theme } from '../../src/theme'
 
@@ -71,6 +73,16 @@ export default function ExerciseScreen() {
             </Pressable>
           ))}
         </View>
+      )}
+
+      {chosenId in MEDIA && (
+        <Image
+          source={MEDIA[chosenId]}
+          style={{ width: '100%', aspectRatio: 1, borderRadius: theme.radius, backgroundColor: theme.surface }}
+          contentFit="contain"
+          // The GIF is the demo; it has to loop on its own or it is a still.
+          autoplay
+        />
       )}
 
       <Card>
