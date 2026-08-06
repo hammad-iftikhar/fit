@@ -24,7 +24,11 @@ export default function RootLayout() {
           headerShadowVisible: false,
           contentStyle: { backgroundColor: theme.bg },
         }}
-      />
+      >
+        {/* Without a title the route name "index" is the header title, and iOS
+            reuses it as the back-button label on every child screen. */}
+        <Stack.Screen name="index" options={{ title: 'Fit' }} />
+      </Stack>
     </>
   )
 }
