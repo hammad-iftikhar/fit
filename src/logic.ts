@@ -85,6 +85,24 @@ export function lastPerformance(
   return out
 }
 
+/**
+ * The rule the whole app exists for: a blank field means "same as last time",
+ * so repeating a set is one tap. Returns null when there is nothing to log.
+ */
+export function resolveSet(
+  input: { weight: string; reps: string; rir: string },
+  suggestion?: Pick<SetRow, 'weight' | 'reps' | 'rir'>,
+): { weight: number; reps: number; rir: number | null } | null {
+  const w = input.weight === '' ? suggestion?.weight : Number(input.weight)
+  const r = input.reps === '' ? suggestion?.reps : Number(input.reps)
+  if (w === undefined || r === undefined || Number.isNaN(w) || Number.isNaN(r) || r <= 0) return null
+  return {
+    weight: w,
+    reps: r,
+    rir: input.rir === '' ? (suggestion?.rir ?? null) : Number(input.rir),
+  }
+}
+
 export function nextScheduledDay(now: number): { key: DayKey; date: number } {
   const cursor = new Date(now)
   for (let i = 0; i < 7; i++) {

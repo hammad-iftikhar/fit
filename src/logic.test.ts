@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  dayKeyOf, weekStart, weekProgress, streak, volume, lastPerformance, nextScheduledDay,
+  dayKeyOf, weekStart, weekProgress, streak, volume, lastPerformance, nextScheduledDay, resolveSet,
   type SessionRow, type SetRow,
 } from './logic'
 import type { DayKey } from './program'
@@ -114,6 +114,37 @@ test('lastPerformance ignores warm-ups and the session in progress', () => {
 
 test('lastPerformance returns empty for an exercise never done', () => {
   assert.deepEqual(lastPerformance([], 'squat'), {})
+})
+
+const LAST = { weight: 60, reps: 8, rir: 2 }
+
+test('blank fields repeat the whole of last session set', () => {
+  assert.deepEqual(resolveSet({ weight: '', reps: '', rir: '' }, LAST), { weight: 60, reps: 8, rir: 2 })
+})
+
+test('a typed field overrides the suggestion, blanks still repeat', () => {
+  assert.deepEqual(resolveSet({ weight: '65', reps: '', rir: '' }, LAST), { weight: 65, reps: 8, rir: 2 })
+  assert.deepEqual(resolveSet({ weight: '', reps: '6', rir: '1' }, LAST), { weight: 60, reps: 6, rir: 1 })
+})
+
+test('blank fields with no previous set log nothing', () => {
+  assert.equal(resolveSet({ weight: '', reps: '', rir: '' }), null)
+  assert.equal(resolveSet({ weight: '80', reps: '', rir: '' }), null, 'reps still missing')
+})
+
+test('nonsense and zero reps log nothing', () => {
+  assert.equal(resolveSet({ weight: 'abc', reps: '8', rir: '' }, LAST), null)
+  assert.equal(resolveSet({ weight: '60', reps: '0', rir: '' }, LAST), null)
+  assert.equal(resolveSet({ weight: '60', reps: '-3', rir: '' }, LAST), null)
+})
+
+test('rir stays null when it was never recorded', () => {
+  assert.equal(resolveSet({ weight: '', reps: '', rir: '' }, { weight: 60, reps: 8, rir: null })?.rir, null)
+  assert.equal(resolveSet({ weight: '60', reps: '8', rir: '' })?.rir, null)
+})
+
+test('a bodyweight set at zero kg is still loggable', () => {
+  assert.deepEqual(resolveSet({ weight: '0', reps: '12', rir: '' }), { weight: 0, reps: 12, rir: null })
 })
 
 test('nextScheduledDay skips to the following programmed day', () => {
