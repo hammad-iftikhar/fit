@@ -1,0 +1,52 @@
+{
+  "fill" : {
+    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "image.jpeg",
+          "name" : "image",
+          "position-specializations" : [
+            {
+              "value" : {
+                "scale" : 1,
+                "translation-in-points" : [
+                  -81.40625,
+                  -81.453125
+                ]
+              }
+            },
+            {
+              "idiom" : "square",
+              "value" : {
+                "scale" : 1.38,
+                "translation-in-points" : [
+                  0,
+                  0
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
