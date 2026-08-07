@@ -42,7 +42,6 @@ export default function ExerciseScreen() {
       set_index: nextIndex,
       is_warmup: warmup ? 1 : 0,
       ...resolved,
-      created_at: Date.now(),
     })
     setWeight(''); setReps(''); setRir('')
     setVersion((v) => v + 1)

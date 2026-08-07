@@ -9,7 +9,8 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#000000",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/fit.icon",
+      "bundleIdentifier": "com.hamsofts.fit"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +19,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.hamsofts.fit"
     },
     "web": {
       "output": "static",
@@ -41,6 +43,12 @@
     "experiments": {
       "typedRoutes": false,
       "reactCompiler": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "428c91b8-69cf-4d11-8f21-b1fdef21f798"
+      }
     }
   }
 }

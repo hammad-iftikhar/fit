@@ -12,11 +12,12 @@ const fmtDate = (ms: number) =>
 
 export default function Home() {
   const router = useRouter()
-  const [tick, setTick] = useState(0)
-  // Recompute on every focus so returning from a workout shows fresh numbers.
-  useFocusEffect(useCallback(() => { setTick((t) => t + 1) }, []))
+  // Re-stamped on every focus, so returning from a workout re-reads the
+  // database and recomputes the numbers. Reading the clock during render is
+  // impure; React calls this initialiser for us.
+  const [now, setNow] = useState(Date.now)
+  useFocusEffect(useCallback(() => { setNow(Date.now()) }, []))
 
-  const now = Date.now()
   const sessions = allSessions()
   const weights = allWeights()
   const todayKey = dayKeyForWeekday(new Date(now).getDay())
@@ -30,7 +31,6 @@ export default function Home() {
 
   return (
     <ScrollView
-      key={tick}
       style={{ backgroundColor: theme.bg }}
       contentContainerStyle={{ padding: theme.space, gap: theme.space, paddingBottom: 48 }}
     >

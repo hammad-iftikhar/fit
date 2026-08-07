@@ -16,7 +16,9 @@ export default function Summary() {
   if (!row) return <Text style={{ color: theme.text, padding: theme.space }}>Session not found</Text>
 
   const working = sets.filter((s) => !s.is_warmup)
-  const minutes = Math.round(((row.ended_at ?? Date.now()) - row.started_at) / 60000)
+  // This screen is only reached after finishing, so ended_at is set; an
+  // in-progress session simply shows no duration rather than a live clock.
+  const minutes = row.ended_at === null ? null : Math.round((row.ended_at - row.started_at) / 60000)
   const exerciseIds = [...new Set(working.map((s) => s.exercise_id))]
 
   return (
@@ -31,7 +33,7 @@ export default function Summary() {
         <Text style={{ color: theme.text, fontSize: theme.font.h1, fontWeight: '800' }}>
           {Math.round(volume(sets))} kg
         </Text>
-        <Muted>{working.length} working sets · {minutes} min</Muted>
+        <Muted>{working.length} working sets{minutes === null ? '' : ` · ${minutes} min`}</Muted>
       </Card>
 
       {exerciseIds.map((exId) => {

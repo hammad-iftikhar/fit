@@ -10,7 +10,7 @@ const db = openDatabaseSync('fit.db')
 
 export type WeightRow = { id: number; logged_at: number; kg: number }
 
-export function migrate(): void {
+function migrate(): void {
   db.execSync(SCHEMA_SQL)
 }
 
@@ -47,12 +47,14 @@ export function autoCloseStaleSessions(now: number): void {
   }
 }
 
-export function insertSet(row: Omit<SetRow, 'id'>): void {
+/** Stamps created_at itself — callers are screens, and clock reads in a
+ *  component body are impure. */
+export function insertSet(row: Omit<SetRow, 'id' | 'created_at'>): void {
   db.runSync(
     `INSERT INTO sets (session_id, exercise_id, set_index, is_warmup, weight, reps, rir, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     row.session_id, row.exercise_id, row.set_index, row.is_warmup,
-    row.weight, row.reps, row.rir, row.created_at,
+    row.weight, row.reps, row.rir, Date.now(),
   )
 }
 
@@ -109,3 +111,10 @@ export function importAll(json: string): void {
     }
   })
 }
+
+// Both are synchronous and must happen before any query, so they run at import
+// rather than from an effect in the root layout — that left a window where a
+// screen could query a table that did not exist yet, and needed a setState in
+// an effect to gate rendering.
+migrate()
+autoCloseStaleSessions(Date.now())
