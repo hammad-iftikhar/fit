@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated'
 import { Image } from 'expo-image'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
@@ -9,6 +9,7 @@ import { deleteSet, insertSet, setsForExercise, setsForSession } from '../../src
 import { MEDIA } from '../../src/media'
 import { BigButton, Card, Label, Muted, NumField } from '../../src/ui'
 import { theme } from '../../src/theme'
+import { alert } from '../../src/alert'
 
 export default function ExerciseScreen() {
   const { id, session } = useLocalSearchParams<{ id: string; session: string }>()
@@ -33,7 +34,7 @@ export default function ExerciseScreen() {
   const commit = () => {
     const resolved = resolveSet({ weight, reps, rir }, suggestion)
     if (!resolved) {
-      Alert.alert('Enter weight and reps', 'There is no previous set to copy from yet.')
+      alert('Enter weight and reps', 'There is no previous set to copy from yet.')
       return
     }
     insertSet({
@@ -120,7 +121,7 @@ export default function ExerciseScreen() {
           <Animated.View key={s.id} entering={FadeIn.duration(180)} layout={LinearTransition.springify()}>
             <Pressable
               onLongPress={() => {
-                Alert.alert('Delete set?', `${s.weight} kg × ${s.reps}`, [
+                alert('Delete set?', `${s.weight} kg × ${s.reps}`, [
                   { text: 'Cancel', style: 'cancel' },
                   { text: 'Delete', style: 'destructive', onPress: () => { deleteSet(s.id); setVersion((v) => v + 1) } },
                 ])

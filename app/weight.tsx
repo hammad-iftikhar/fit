@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Alert, ScrollView, Text, View } from 'react-native'
+import { ScrollView, Text, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { allWeights, insertWeight } from '../src/db'
 import { BigButton, Card, Label, Muted, NumField } from '../src/ui'
 import { theme } from '../src/theme'
+import { alert } from '../src/alert'
 
 export default function Weight() {
   const [value, setValue] = useState('')
@@ -13,7 +14,7 @@ export default function Weight() {
   const save = () => {
     const kg = Number(value)
     if (!value || Number.isNaN(kg) || kg <= 0 || kg > 500) {
-      Alert.alert('Enter a body weight in kg', 'Must be a number between 0 and 500.')
+      alert('Enter a body weight in kg', 'Must be a number between 0 and 500.')
       return
     }
     insertWeight(kg, Date.now())
