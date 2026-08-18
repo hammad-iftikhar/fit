@@ -61,12 +61,12 @@ export function insertSet(row: Omit<SetRow, 'id' | 'created_at'>): void {
 export const deleteSet = (id: number) => { db.runSync('DELETE FROM sets WHERE id = ?', id) }
 
 export const setsForSession = (sessionId: number) =>
-  db.getAllSync<SetRow>('SELECT * FROM sets WHERE session_id = ? ORDER BY created_at', sessionId)
+  db.getAllSync<SetRow>('SELECT * FROM sets WHERE session_id = ? ORDER BY created_at, id', sessionId)
 
 export const setsForExercise = (exerciseId: string) =>
-  db.getAllSync<SetRow>('SELECT * FROM sets WHERE exercise_id = ? ORDER BY created_at DESC', exerciseId)
+  db.getAllSync<SetRow>('SELECT * FROM sets WHERE exercise_id = ? ORDER BY created_at DESC, id DESC', exerciseId)
 
-export const allSets = () => db.getAllSync<SetRow>('SELECT * FROM sets ORDER BY created_at')
+export const allSets = () => db.getAllSync<SetRow>('SELECT * FROM sets ORDER BY created_at, id')
 export const allSessions = () => db.getAllSync<SessionRow>('SELECT * FROM sessions ORDER BY started_at DESC')
 export const getSession = (id: number) =>
   db.getFirstSync<SessionRow>('SELECT * FROM sessions WHERE id = ?', id) ?? undefined

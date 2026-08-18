@@ -65,6 +65,9 @@ export function NumField({ value, onChangeText, placeholder }: {
       selectTextOnFocus
       style={{
         flex: 1,
+        // On web an <input> carries an intrinsic width that flexbox refuses to
+        // shrink past, so three of these in a row overflow the card.
+        minWidth: 0,
         minHeight: 56,
         textAlign: 'center',
         color: theme.text,

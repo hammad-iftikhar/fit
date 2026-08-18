@@ -12,6 +12,11 @@
       "icon": "./assets/fit.icon",
       "bundleIdentifier": "com.hamsofts.fit"
     },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
     "plugins": [
       "expo-router",
       [
