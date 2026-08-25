@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { PROGRAM } from '../src/program'
+import { PROGRAM, TRAINING_DAY_KEYS } from '../src/program'
 import { dayKeyForWeekday, nextScheduledDay, streak, volume, weekProgress } from '../src/logic'
 import { allSessions, allWeights, setsForSession } from '../src/db'
 import { BigButton, Card, Label, Muted } from '../src/ui'
@@ -59,6 +59,21 @@ export default function Home() {
         <Label>{PROGRAM[next.key].title}</Label>
         <Muted>{fmtDate(next.date)}</Muted>
       </Card>
+
+      <View style={{ gap: 8 }}>
+        <Muted>GO TO DAY</Muted>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {TRAINING_DAY_KEYS.map((k) => (
+            <View key={k} style={{ flex: 1 }}>
+              <BigButton
+                label={k[0].toUpperCase() + k.slice(1)}
+                variant={k === todayKey ? 'primary' : 'ghost'}
+                onPress={() => router.push(`/workout/${k}`)}
+              />
+            </View>
+          ))}
+        </View>
+      </View>
 
       <View style={{ flexDirection: 'row', gap: theme.space }}>
         <Card style={{ flex: 1 }}>
